@@ -43,34 +43,37 @@ object Main extends App {
       .map(_._1)
 
 
-    val counts = textCols.take(10).map { c =>
-      val distinct = df
-        .select(c)
-        .distinct()
-        .limit(100)
-        .collect
-        .size
-//        .map(_.getString(0))
+//    val counts = textCols.take(10).map { c =>
+//      val distinct = df
+//        .select(c)
+//        .distinct()
+//        .limit(100)
+//        .collect
+//        .size
+////        .map(_.getString(0))
+//
+//      println(s"--> $c ~ ${distinct}")
+//
+//      (c, distinct)
+//    }.toList
+//
+//    def isUnary(d: (String, Int)) = d._2 == 1
+//    def isBinary(d: (String, Int)) = d._2 == 2
+//    def isCategorical(d: (String, Int), limit: Int = 10) = d._2 > 2 && d._2 < limit
+//
+//    val unary = counts.filter(isUnary(_)).map(_._1).toSet
+//    val binary = counts.filter(isBinary(_)).map(_._1).toSet
+//    val categorical = counts.filter(isCategorical(_)).map(_._1).toSet
+//    val other = counts.map(_._1).toSet -- unary -- binary -- categorical
+//
+//    println(s"unary --> $unary")
+//    println(s"binary --> $binary")
+//    println(s"categorical --> $categorical")
+//    println(s"other --> ${counts.map(_._1).toSet -- unary -- binary -- categorical}")
 
-      println(s"--> $c ~ ${distinct}")
-
-      (c, distinct)
-    }.toList
-
-    def isUnary(d: (String, Int)) = d._2 == 1
-    def isBinary(d: (String, Int)) = d._2 == 2
-    def isCategorical(d: (String, Int), limit: Int = 10) = d._2 > 2 && d._2 < limit
-
-    val unary = counts.filter(isUnary(_)).map(_._1).toSet
-    val binary = counts.filter(isBinary(_)).map(_._1).toSet
-    val categorical = counts.filter(isCategorical(_)).map(_._1).toSet
-    val other = counts.map(_._1).toSet -- unary -- binary -- categorical
-
-    println(s"unary --> $unary")
-    println(s"binary --> $binary")
-    println(s"categorical --> $categorical")
-    println(s"other --> ${counts.map(_._1).toSet -- unary -- binary -- categorical}")
-
+    val binary  = Set("VAR_0008", "VAR_0011", "VAR_0012", "VAR_0009", "VAR_0010")
+    val categorical  = Set("VAR_0001", "VAR_0005")
+    val other  = Set("VAR_0007", "VAR_0013", "VAR_0006")
 
     import org.apache.spark.sql.functions._
 
@@ -83,14 +86,24 @@ object Main extends App {
     def fixSchema(df: DataFrame, others: Set[String]): DataFrame =
       others.foldLeft(df) { case (df, c) => df.withColumn(c, toDouble(df(c))) }
 
-    val Array(trainingData, testData) = fixSchema(df, others = other).randomSplit(Array(0.7, 0.3)).map(_.cache())
-
-    trainingData.select("VAR_0007").printSchema()
-
-    preprocess(trainingData)
+    val data = preprocess(fixSchema(df, others = other), categorical)
       .select("target", "features")
-      .take(10)
-      .foreach(println)
+
+    val Array(trainingData, testData) = data.randomSplit(Array(0.7, 0.3)).map(_.cache())
+
+    val c = new GBTClassifier()
+      .setFeaturesCol("features")
+      .setLabelCol("target")
+      .setMaxIter(20)
+
+    val m = new MulticlassClassificationEvaluator()
+      .setLabelCol("target")
+      .setPredictionCol("prediction")
+
+    println(m.evaluate(c.fit(trainingData).transform(testData)))
+
+
+
 
   } finally {
     sc.stop()
@@ -106,7 +119,7 @@ object Main extends App {
     }
   }
   
-  def preprocess(df: DataFrame, textCols: List[String]): DataFrame = {
+  def preprocess(df: DataFrame, textCols: Set[String]): DataFrame = {
     import org.apache.spark.sql.functions._
     val toDouble = udf[Double, String]( _.toDouble)
 
@@ -116,7 +129,7 @@ object Main extends App {
       .withColumn("target", toDouble(df("target")))
   }
 
-  def buildPipeline(training: DataFrame, textCols: List[String]): Pipeline = {
+  def buildPipeline(training: DataFrame, textCols: Set[String]): Pipeline = {
     val featureTypes = training
       .drop("target")
       //      .drop("VAR_0009")
@@ -180,8 +193,6 @@ object Main extends App {
     val featuresAssembler = new VectorAssembler()
       .setInputCols(Array("textFeatures", "normNumFeatures"))
       .setOutputCol("features")
-
-
 
     // Pipeline
     new Pipeline().setStages(
