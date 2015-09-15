@@ -4,12 +4,19 @@ import org.apache.spark.mllib.linalg.{Vector => Vec}
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 
-trait SparkJob {
+trait SparkJob extends Serializable {
   val conf = new SparkConf()
-    .setMaster("local[*]")
+    .setMaster("spark://localhost:7077")
     .setAppName("springleaf")
-    .setExecutorEnv("spark.executor.memory", "4G")
+    .set("spark.driver.memory", "4G")
+    .set("spark.executor.memory", "4G")
 
   val sc = new SparkContext(conf)
   val sqlContext = new SQLContext(sc)
+
+//  sc.addJar("/Users/petr/Research/spark/lib/jars/driver/spark-csv-assembly-1.2.0.jar")
+//  sc.addJar("/Users/petr/Research/spark/spark-csv/target/scala-2.10/spark-csv-assembly-1.2.0.jar")
+  sc.addJar("/Users/petr/.ivy2/cache/org.apache.commons/commons-csv/jars/commons-csv-1.1.jar")
+  sc.addJar("/Users/petr/.ivy2/cache/com.databricks/spark-csv_2.10/jars/spark-csv_2.10-1.2.0.jar")
+  sc.addJar("/Users/petr/Research/springleaf/spark/target/scala-2.10/spark_2.10-1.0.jar")
 }

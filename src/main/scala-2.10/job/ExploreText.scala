@@ -16,7 +16,7 @@ object ExploreText extends SpringLeaf {
       }
         .map(_._1)
 
-      println(s"textcols --> $textCols")
+      println(s"textcols --> ${textCols.toList}")
 
       val counts = textCols.map { c =>
         val distinct = df

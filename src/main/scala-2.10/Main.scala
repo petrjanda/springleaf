@@ -1,4 +1,4 @@
-import job.{ExploreText, Predict}
+import job._
 import org.apache.spark.ml.attribute._
 import org.apache.spark.ml.feature._
 import org.apache.spark.ml.util.SchemaUtils
@@ -11,6 +11,7 @@ object Main extends App {
   app match {
     case "text" => ExploreText.run
     case "predict" => Predict.run
+    case "explore" => Explore.run
   }
 }
 
