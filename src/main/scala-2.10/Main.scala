@@ -11,7 +11,7 @@ object Main extends App {
   app match {
     case "text" => ExploreText.run
     case "predict" => Predict.run
-    case "explore" => Explore.run
+    case "preprocess" => Preprocess.run
   }
 }
 

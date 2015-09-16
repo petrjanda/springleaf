@@ -11,8 +11,8 @@ trait SparkJob extends Serializable {
     .set("spark.driver.memory", "4G")
     .set("spark.executor.memory", "4G")
 
-  val sc = new SparkContext(conf)
-  val sqlContext = new SQLContext(sc)
+  implicit val sc = new SparkContext(conf)
+  implicit val sqlContext = new SQLContext(sc)
 
 //  sc.addJar("/Users/petr/Research/spark/lib/jars/driver/spark-csv-assembly-1.2.0.jar")
 //  sc.addJar("/Users/petr/Research/spark/spark-csv/target/scala-2.10/spark-csv-assembly-1.2.0.jar")
