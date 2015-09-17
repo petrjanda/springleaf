@@ -21,8 +21,9 @@ trait PipelineDsl {
     new Normalizer()
       .setInputCol(input)
       .setOutputCol(output)
+}
 
-  // TODO: Refactor to DataFrame DSL
+trait DataFrameSVM {
   def saveSVM(df: DataFrame, path: String, labelCol: String = "label", featuresCol: String = "features"): Unit =
     MLUtils.saveAsLibSVMFile(
       df.map { row =>
@@ -37,11 +38,9 @@ trait PipelineDsl {
 
     MLUtils.loadLibSVMFile(sc, path).toDF(labelCol, featuresCol)
   }
+}
 
-  def toDouble(df: DataFrame, cols: Set[String]): DataFrame = {
-    cols.foldLeft(df) { case(df, col) => df.withColumn(col, df(col).cast(DoubleType)) }
-  }
-
+trait DataFrameDSL extends DataFrameSVM {
   implicit class DataFramePimp(df: DataFrame) {
     def encodeNumerical() =
       NumericalEncoder.run(df)
@@ -68,7 +67,7 @@ trait PipelineDsl {
       CategoricalEncoder.run(df, cols)
 
     def correctDoubles(cols: Set[String]) =
-      toDouble(df, cols)
+      cols.foldLeft(df) { case(df, col) => df.withColumn(col, df(col).cast(DoubleType)) }
 
     def drop(cols: Set[String]) =
       cols.foldLeft(df) { _.drop(_) }
@@ -82,5 +81,18 @@ trait PipelineDsl {
 
     def fitAndTransform(pipeline: Pipeline): DataFrame =
       pipeline.fit(df).transform(df)
+
+
+    def assemble(cols: Set[String], col: String) = {
+      df.fitAndTransform(new Pipeline().setStages(List(assemblerB(cols.toList, col)).toArray))
+    }
+
+    def toSVM(path: String, labelCol: String) = {
+      saveSVM(df, path, labelCol = labelCol)
+
+      df
+    }
+
+    def fromSVM(path: String) = loadSVM(path)
   }
 }

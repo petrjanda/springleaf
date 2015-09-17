@@ -5,7 +5,7 @@ import org.apache.spark.mllib.linalg.{Vector => Vec}
 object ExploreText extends SpringLeaf {
   def run = {
     try {
-      val df = loadTrainData
+      val df = loadTrainData("../csv/train.csv")
 
       val textCols = df.dtypes
         .filter { case (_, v) => v == "StringType" }

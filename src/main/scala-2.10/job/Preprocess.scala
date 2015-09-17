@@ -1,20 +1,18 @@
 package job
 
-import ml.PipelineDsl
-import org.apache.spark.ml.{Pipeline}
+import ml.{DataFrameDSL, PipelineDsl}
 import org.apache.spark.mllib.linalg.{Vector => Vec}
-import org.apache.spark.sql.{SQLContext, DataFrame}
 
-object Preprocess extends SpringLeaf with PipelineDsl {
-  def run = try {
-    val bad = Set(
+object Preprocess extends SpringLeaf with PipelineDsl with DataFrameDSL {
+  def run(path: String) = try {
+    val badFeatures = Set(
       "VAR_0214",
       "VAR_0207",
       "VAR_0213",
       "VAR_0840"
     )
 
-    val numWithNa = Set(
+    val numWithNaFeatures = Set(
       "VAR_0228",
       "VAR_0209",
       "VAR_0299",
@@ -301,7 +299,7 @@ object Preprocess extends SpringLeaf with PipelineDsl {
       "VAR_0199"
     )
 
-    val categorical = Set(
+    val categoricalFeatures = Set(
       "VAR_0460",
       "VAR_0445",
       "VAR_0381",
@@ -533,29 +531,35 @@ object Preprocess extends SpringLeaf with PipelineDsl {
       "VAR_0482"
     )
 
-    val dates = Set(
-      "VAR_0073", "VAR_0075", "VAR_0156", "VAR_0157", "VAR_0158",
-      "VAR_0159", "VAR_0166", "VAR_0167", "VAR_0168", "VAR_0176",
-      "VAR_0177", "VAR_0178", "VAR_0179", "VAR_0204", "VAR_0217"
+    val datesFeatures = Set(
+      "VAR_0073",
+      "VAR_0075",
+      "VAR_0156",
+      "VAR_0157",
+      "VAR_0158",
+      "VAR_0159",
+      "VAR_0166",
+      "VAR_0167",
+      "VAR_0168",
+      "VAR_0176",
+      "VAR_0177",
+      "VAR_0178",
+      "VAR_0179",
+      "VAR_0204",
+      "VAR_0217"
     )
 
-    val df = loadTrainData
-      .drop(bad)
-      .correctDoubles(numWithNa + "target")
-      .na.fill(0.0)
-      .encodeDates(dates)
+    val df = loadTrainData(path)
+      .drop(badFeatures)
+      .correctDoubles(numWithNaFeatures + "target").na.fill(0.0)
+      .encodeDates(datesFeatures)
       .encodeNumerical()
-      .encodeCategorical(categorical)
-      .fitAndTransform(new Pipeline().setStages(
-        List(
-        assemblerB(List("textFeatures", "normNumFeatures"), "features")
-        ).toArray
-      ))
+//      .encodeCategorical(categoricalFeatures)
+//      .assemble(Set("textFeatures", "normNumFeatures"), "features")
+      .withColumnRenamed("normNumFeatures", "features")
       .select("target", "features")
-
-
-    // Save
-    saveSVM(df, "build/train/", labelCol = "target")
+      .toSVM("build/train/", labelCol = "target")
+      .printSchema()
   } finally {
     sc.stop()
   }

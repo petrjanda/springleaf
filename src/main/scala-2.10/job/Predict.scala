@@ -1,6 +1,6 @@
 package job
 
-import ml.PipelineDsl
+import ml.{DataFrameSVM, PipelineDsl}
 import org.apache.spark.ml.classification.{RandomForestClassifier, MultilayerPerceptronClassifier, GBTClassifier}
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, Normalizer, StringIndexer, VectorAssembler}
@@ -13,7 +13,7 @@ import org.apache.spark.sql.DataFrame
 import scala.util.control.NonFatal
 
 
-object Predict extends SpringLeaf with PipelineDsl {
+object Predict extends SpringLeaf with PipelineDsl with DataFrameSVM {
   def run = {
     try {
       val df = loadSVM("build/train/")

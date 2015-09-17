@@ -6,12 +6,12 @@ import org.apache.spark.mllib.linalg.{Vector => Vec}
 import org.apache.spark.sql.types.{DoubleType, StructType}
 
 object Main extends App {
-  val app = args.toList.head
+  val app :: tail = args.toList
 
   app match {
     case "text" => ExploreText.run
     case "predict" => Predict.run
-    case "preprocess" => Preprocess.run
+    case "preprocess" => Preprocess.run(tail.head)
   }
 }
 
