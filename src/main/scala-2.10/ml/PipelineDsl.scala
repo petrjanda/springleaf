@@ -6,9 +6,10 @@ import org.apache.spark.SparkContext
 import org.apache.spark.ml.feature.{Normalizer, VectorAssembler}
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{SQLContext, DataFrame}
 import org.apache.spark.mllib.linalg.{Vector => Vec}
-import org.apache.spark.sql.types.DoubleType
+import org.apache.spark.sql.types.{StringType, DoubleType}
 import org.apache.spark.ml.Pipeline
 
 trait PipelineDsl {
@@ -45,13 +46,13 @@ trait DataFrameDSL extends DataFrameSVM {
     def encodeNumerical() =
       NumericalEncoder.run(df)
 
-    def encodeDates(cols: Set[String]) = {
+    def encodeDates(cols: Set[String], transformer: java.util.Date => Int) = {
       import org.apache.spark.sql.functions._
 
       val format = new java.text.SimpleDateFormat("ddMMMyy:HH:mm:ss")
       val toDays = udf[Double, String] { s =>
         try {
-          format.parse(s).getTime / (1000 * 60 * 60 * 24)
+          transformer(format.parse(s))
         } catch {
           case e:java.text.ParseException => 0.0
         }
@@ -63,7 +64,14 @@ trait DataFrameDSL extends DataFrameSVM {
       fixDates(df, cols)
     }
 
-    def encodeCategorical(cols: Set[String]) =
+    def extractLabels(cols: Set[String]): Map[String, scala.collection.Map[String, Long]] = {
+      cols.map { c =>
+        (c, df.select(col(c).cast(StringType)).map(_.getString(0)).countByValue())
+      }.toMap
+    }
+
+
+    def encodeCategorical(cols: Map[String, List[String]]) =
       CategoricalEncoder.run(df, cols)
 
     def correctDoubles(cols: Set[String]) =
@@ -94,5 +102,18 @@ trait DataFrameDSL extends DataFrameSVM {
     }
 
     def fromSVM(path: String) = loadSVM(path)
+
+    def inspect(lines: Int = 10): DataFrame = {
+      locally { df =>
+        df.printSchema()
+        df.show(lines)
+      }
+    }
+
+    def locally[T](todo: DataFrame => T): DataFrame = {
+      todo(df)
+
+      df
+    }
   }
 }

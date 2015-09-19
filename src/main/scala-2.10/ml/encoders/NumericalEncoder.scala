@@ -11,7 +11,7 @@ object NumericalEncoder extends DataFrameDSL with PipelineDsl {
       .colsByType(Set("IntegerType", "DoubleType"))
 
     val numAssembler = assemblerB(intCols.toList, "numFeatures")
-    val normalizer = normalizerB("numFeatures", "normNumFeatures").setP(1.0)
+    val normalizer = normalizerB("numFeatures", "normNumFeatures").setP(2.0)
 
     val pipeline = new Pipeline().setStages((List(numAssembler, normalizer)).toArray)
 

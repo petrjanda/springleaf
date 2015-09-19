@@ -11,8 +11,115 @@ object Main extends App {
   app match {
     case "text" => ExploreText.run
     case "predict" => Predict.run
-    case "preprocess" => Preprocess.run(tail.head)
+    case "preprocess" => Preprocess.run(tail.head, tail.tail.head)
   }
+}
+
+package org.apache.spark.ml.feature {
+
+import org.apache.spark.SparkException
+import org.apache.spark.ml.{Model, Estimator}
+  import org.apache.spark.ml.param.ParamMap
+  import org.apache.spark.ml.util.Identifiable
+  import org.apache.spark.sql.DataFrame
+  import org.apache.spark.sql.types.StringType
+  import org.apache.spark.sql.functions._
+import org.apache.spark.util.collection.OpenHashMap
+
+class StringIndexer(override val uid: String) extends Estimator[StringIndexerModel]
+  with StringIndexerBase {
+
+    def this() = this(Identifiable.randomUID("strIdx"))
+
+    /** @group setParam */
+    def setInputCol(value: String): this.type = set(inputCol, value)
+
+    /** @group setParam */
+    def setOutputCol(value: String): this.type = set(outputCol, value)
+
+    // TODO: handle unseen labels
+
+    override def fit(dataset: DataFrame): StringIndexerModel = {
+      val counts = dataset.select(col($(inputCol)).cast(StringType))
+        .map(_.getString(0))
+        .countByValue()
+      val labels = counts.toSeq.sortBy(-_._2).map(_._1).toArray
+      copyValues(new StringIndexerModel(uid, labels).setParent(this))
+    }
+
+    def fit(labels: Array[String]): MyStringIndexerModel = {
+      copyValues(new MyStringIndexerModel(uid, labels.toArray))
+    }
+
+    override def transformSchema(schema: StructType): StructType = {
+      validateAndTransformSchema(schema)
+    }
+
+    override def copy(extra: ParamMap): StringIndexer = defaultCopy(extra)
+  }
+
+class MyStringIndexerModel (
+                           override val uid: String,
+                           val labels: Array[String]) extends Model[StringIndexerModel] with StringIndexerBase {
+
+  def this(labels: Array[String]) = this(Identifiable.randomUID("strIdx"), labels)
+
+  private val labelToIndex: OpenHashMap[String, Double] = {
+    val n = labels.length
+    val map = new OpenHashMap[String, Double](n)
+    var i = 0
+    while (i < n) {
+      map.update(labels(i), i)
+      i += 1
+    }
+    map
+  }
+
+  /** @group setParam */
+  def setInputCol(value: String): this.type = set(inputCol, value)
+
+  /** @group setParam */
+  def setOutputCol(value: String): this.type = set(outputCol, value)
+
+  override def transform(dataset: DataFrame): DataFrame = {
+    if (!dataset.schema.fieldNames.contains($(inputCol))) {
+      logInfo(s"Input column ${$(inputCol)} does not exist during transformation. " +
+        "Skip StringIndexerModel.")
+      return dataset
+    }
+
+    val indexer = udf { label: String =>
+      if (labelToIndex.contains(label)) {
+        labelToIndex(label)
+      } else {
+        // TODO: handle unseen labels
+        throw new SparkException(s"Unseen label: $label.")
+      }
+    }
+    val outputColName = $(outputCol)
+    val metadata = NominalAttribute.defaultAttr
+      .withName(outputColName).withValues(labels).toMetadata()
+
+    dataset.withColumn($(outputCol), indexer(dataset($(inputCol))))
+//    dataset.select(col("*"),
+//      indexer(dataset($(inputCol)).cast(StringType)).as(outputColName, metadata))
+  }
+
+  override def transformSchema(schema: StructType): StructType = {
+    if (schema.fieldNames.contains($(inputCol))) {
+      validateAndTransformSchema(schema)
+    } else {
+      // If the input column does not exist during transformation, we skip StringIndexerModel.
+      schema
+    }
+  }
+
+  override def copy(extra: ParamMap): StringIndexerModel = {
+    val copied = new StringIndexerModel(uid, labels)
+    copyValues(copied, extra).setParent(parent)
+  }
+}
+
 }
 
 

@@ -8,8 +8,8 @@ trait SparkJob extends Serializable {
   val conf = new SparkConf()
     .setMaster("spark://localhost:7077")
     .setAppName("springleaf")
-    .set("spark.driver.memory", "6G")
-    .set("spark.executor.memory", "6G")
+    .set("spark.driver.memory", "14G")
+    .set("spark.executor.memory", "10G")
 
   implicit val sc = new SparkContext(conf)
   implicit val sqlContext = new SQLContext(sc)

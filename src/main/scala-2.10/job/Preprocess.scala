@@ -1,10 +1,11 @@
 package job
 
+import java.io.{File, FileWriter}
 import ml.{DataFrameDSL, PipelineDsl}
 import org.apache.spark.mllib.linalg.{Vector => Vec}
 
 object Preprocess extends SpringLeaf with PipelineDsl with DataFrameDSL {
-  def run(path: String) = try {
+  def run(path: String, outPath: String) = try {
     val badFeatures = Set(
       "VAR_0214",
       "VAR_0207",
@@ -549,17 +550,58 @@ object Preprocess extends SpringLeaf with PipelineDsl with DataFrameDSL {
       "VAR_0217"
     )
 
+    def using[A <: {def close() : Unit}, B](resource: A)(f: A => B): B =
+      try f(resource) finally resource.close()
+
+    def writeStringToFile(file: File, data: String, appending: Boolean = false) =
+      using(new FileWriter(file, appending))(_.write(data))
+
+    val labels = scala.io.Source
+      .fromFile("build/categorical-labels.csv")
+      .getLines().toList
+      .map { l =>
+      val d = l.split(", ").toList
+
+      (d(0), d(1).drop(1).dropRight(1).split(",").toList)
+    }.toMap
+
+    println(labels)
+
     val df = loadTrainData(path)
       .drop(badFeatures)
-      .correctDoubles(numWithNaFeatures + "target").na.fill(0.0)
-      .encodeDates(datesFeatures)
+
+      .correctDoubles(
+        numWithNaFeatures + "target"
+      ).na.fill(0.0)
+
+      .encodeDates(
+        datesFeatures,
+        transformer = { f => f.getYear * 12 + f.getMonth }
+      )
+
+//      .locally { _.select(datesFeatures.head, datesFeatures.tail.toSeq: _*).inspect(1) }
       .encodeNumerical()
-//      .encodeCategorical(categoricalFeatures)
-//      .assemble(Set("textFeatures", "normNumFeatures"), "features")
-      .withColumnRenamed("normNumFeatures", "features")
-      .select("target", "features")
-      .toSVM("build/train/", labelCol = "target")
-      .printSchema()
+//      .locally { _.select("normNumFeatures").take(1) }
+
+//        LABELS EXTRACTOR
+//      .locally { df =>
+//        val labels = df.cache().extractLabels(categoricalFeatures).map { case (k, v) =>
+//          (k, v.toList.sortBy { case (k, v) => v }.map(_._1).mkString(","))
+//        }.map { case(k, v) => k + ", \"" + v + "\"" }.mkString("\n")
+//
+//        using (new FileWriter("build/categorical-labels.csv")) {
+//          fileWriter => fileWriter.write(labels)
+//        }
+//      }
+
+      .cache()
+      .encodeCategorical(labels)
+      .assemble(Set("textFeatures", "normNumFeatures"), "features")
+//      .withColumnRenamed("normNumFeatures", "features")
+//      .select("target", "features")
+      .toSVM(outPath, labelCol = "target")
+//      .write.save("build/csv/test/")
+//      .printSchema()
   } finally {
     sc.stop()
   }

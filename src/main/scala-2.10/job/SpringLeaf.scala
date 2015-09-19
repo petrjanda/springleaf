@@ -7,7 +7,5 @@ trait SpringLeaf extends SparkJob with Serializable {
       .option("header", "true")
       .option("inferSchema", "true")
       .load(path)
-//      .load("csv/train_mini.csv")
-      .cache()
   }
 }
