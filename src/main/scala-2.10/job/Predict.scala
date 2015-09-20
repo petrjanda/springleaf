@@ -4,6 +4,7 @@ import ml.{DataFrameSVM, PipelineDsl}
 import org.apache.spark.ml.classification.{RandomForestClassifier, MultilayerPerceptronClassifier, GBTClassifier}
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, MulticlassClassificationEvaluator}
 import org.apache.spark.ml.feature.{IndexToString, Normalizer, StringIndexer, VectorAssembler}
+import org.apache.spark.ml.tuning.{ParamGridBuilder, CrossValidator}
 import org.apache.spark.ml.{MyOneHotEncoder, Pipeline, PipelineStage}
 import org.apache.spark.mllib.linalg.{Vector => Vec}
 import org.apache.spark.mllib.regression.LabeledPoint
@@ -16,7 +17,7 @@ import scala.util.control.NonFatal
 object Predict extends SpringLeaf with PipelineDsl with DataFrameSVM {
   def run = {
     try {
-      val df = loadSVM("build/train/")
+      val df = loadSVM("build/test/")
 
 //      import org.apache.spark.sql.functions._
 //
@@ -47,10 +48,11 @@ object Predict extends SpringLeaf with PipelineDsl with DataFrameSVM {
 
       val Array(trainingData, testData) = p.fit(df).transform(df).randomSplit(Array(0.8, 0.2)).map(_.cache())
 
-      val c = new RandomForestClassifier()
+      val randomForestClassifier = new RandomForestClassifier()
         .setFeaturesCol("features")
         .setLabelCol("indexedTarget")
-        .setMaxDepth(5)
+        .setMaxDepth(10)
+        .setMaxBins(10)
 
 //      val size = testData.select("features").take(1)(0).getAs[Vec]("features").size
 //      val c = new MultilayerPerceptronClassifier()
@@ -61,13 +63,26 @@ object Predict extends SpringLeaf with PipelineDsl with DataFrameSVM {
 //        .setLayers(Array(size, 100, 2))
 
 
-      val m = new BinaryClassificationEvaluator()
+      val binaryClassifier = new BinaryClassificationEvaluator()
         .setLabelCol("indexedTarget")
         .setRawPredictionCol("probability")
         .setMetricName("areaUnderROC")
 
-      println(m.evaluate(c.fit(trainingData).transform(trainingData)))
-      println(m.evaluate(c.fit(trainingData).transform(testData)))
+      val params = new ParamGridBuilder()
+        .addGrid(randomForestClassifier.maxDepth, Array(10, 15))
+        .addGrid(randomForestClassifier.maxBins, Array(10, 15))
+        .addGrid(randomForestClassifier.impurity, Array("entropy", "gini"))
+        .build()
+
+      val cv = new CrossValidator()
+        .setEstimator(randomForestClassifier)
+        .setEvaluator(binaryClassifier)
+        .setNumFolds(4)
+        .setEstimatorParamMaps(params)
+
+      println(binaryClassifier.evaluate(cv.fit(trainingData).transform(trainingData)))
+      println(binaryClassifier.evaluate(cv.fit(trainingData).transform(testData)))
+      println(cv.params)
 
 
     } finally {
